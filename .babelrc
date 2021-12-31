@@ -1,0 +1,17 @@
+{
+  "presets": [
+    [
+      "@babel/preset-env",
+      {
+        "useBuiltIns": "entry",
+        "targets": {
+          "node": "12"
+        },
+        "corejs": 2
+      }
+    ]
+  ],
+  "plugins": [
+    "@babel/plugin-proposal-export-default-from"
+  ]
+}
