@@ -139,8 +139,6 @@ function idorDirectiveTransformer(directiveName, options) {
               });
             }
           }
-        } else {
-          console.warn(`Field argument ${name} is of unknown type`);
         }
       }
       return argumentTransformers;
