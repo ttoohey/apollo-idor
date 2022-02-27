@@ -40,6 +40,11 @@ describe("GraphQL @indirect directive", () => {
       nonnullSubs: [SubInput!]
     }
 
+    input CircularInput {
+      id: ID @indirect(type: "User")
+      circular: CircularInput
+    }
+
     type Query {
       user(id: ID @indirect(type: "User"), input: UserInput): User
       users(
@@ -50,6 +55,7 @@ describe("GraphQL @indirect directive", () => {
       userIds: UserIds
       userIdList: [ID] @indirect(type: "User")
       usersWithSub(input: UserWithSubsInput!): [User]
+      userWithCircular(input: CircularInput): User
     }
   `;
   const resolvers = {
@@ -89,6 +95,11 @@ describe("GraphQL @indirect directive", () => {
       },
       usersWithSub(...args) {
         return resolvers.Query.users(...args);
+      },
+      userWithCircular(root, { input }) {
+        const findId = ({ id, circular }) => (circular ? findId(circular) : id);
+        const id = findId(input);
+        return users.find((user) => user.id === id);
       },
     },
   };
@@ -362,6 +373,35 @@ describe("GraphQL @indirect directive", () => {
     const expected = {
       data: {
         usersWithSub: [{ id: "FLN1a5AnVsGFmVXQYabHxA", name: "User 1" }],
+      },
+    };
+    expect(received).toEqual(expected);
+  });
+
+  test("arguments can contain circular nested objects", async () => {
+    const source = `
+      query($input: CircularInput) {
+        userWithCircular(input: $input) {
+          id
+          name
+        }
+      }
+    `;
+    const variableValues = {
+      input: {
+        circular: { circular: { circular: { id: "FLN1a5AnVsGFmVXQYabHxA" } } },
+      },
+    };
+    const received = await graphql({
+      schema,
+      source,
+      rootValue,
+      contextValue,
+      variableValues,
+    });
+    const expected = {
+      data: {
+        userWithCircular: { id: "FLN1a5AnVsGFmVXQYabHxA", name: "User 1" },
       },
     };
     expect(received).toEqual(expected);

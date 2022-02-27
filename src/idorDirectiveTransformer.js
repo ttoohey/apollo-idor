@@ -97,34 +97,14 @@ function idorDirectiveTransformer(directiveName, options) {
           }
         } else if (isGraphQLInputObjectType(config.type)) {
           const fields = getGraphQLInputObjectTypeFields(config.type);
-          const childTransformers = getArgumentTransformers(fields);
-          if (childTransformers.size > 0) {
-            if (isGraphQLList(config.type)) {
-              argumentTransformers.set(name, (values, context) => {
-                if (values === null || values === undefined) {
-                  return values;
-                }
-                const list = [];
-                for (const value of values) {
-                  const result = {};
-                  for (const [fieldName, transform] of childTransformers) {
-                    if (
-                      value[fieldName] === null ||
-                      value[fieldName] === undefined
-                    ) {
-                      continue;
-                    }
-                    result[fieldName] = transform(value[fieldName], context);
-                  }
-                  list.push({ ...value, ...result });
-                }
-                return list;
-              });
-            } else {
-              argumentTransformers.set(name, (value, context) => {
-                if (value === null || value === undefined) {
-                  return value;
-                }
+          if (isGraphQLList(config.type)) {
+            argumentTransformers.set(name, (values, context) => {
+              if (values === null || values === undefined) {
+                return values;
+              }
+              const childTransformers = getArgumentTransformers(fields);
+              const list = [];
+              for (const value of values) {
                 const result = {};
                 for (const [fieldName, transform] of childTransformers) {
                   if (
@@ -135,9 +115,28 @@ function idorDirectiveTransformer(directiveName, options) {
                   }
                   result[fieldName] = transform(value[fieldName], context);
                 }
-                return { ...value, ...result };
-              });
-            }
+                list.push({ ...value, ...result });
+              }
+              return list;
+            });
+          } else {
+            argumentTransformers.set(name, (value, context) => {
+              if (value === null || value === undefined) {
+                return value;
+              }
+              const childTransformers = getArgumentTransformers(fields);
+              const result = {};
+              for (const [fieldName, transform] of childTransformers) {
+                if (
+                  value[fieldName] === null ||
+                  value[fieldName] === undefined
+                ) {
+                  continue;
+                }
+                result[fieldName] = transform(value[fieldName], context);
+              }
+              return { ...value, ...result };
+            });
           }
         }
       }
