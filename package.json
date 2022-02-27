@@ -12,8 +12,8 @@
     "lib"
   ],
   "scripts": {
-    "build": "babel -d lib src",
-    "build:dev": "babel -d lib src -s",
+    "build": "babel -d lib  --ignore '**/*.test.js' src",
+    "build:dev": "babel -d lib  --ignore '**/*.test.js' src -s",
     "clean": "rm -rf lib && mkdir lib",
     "lint": "eslint --ext .js --ext .json src",
     "prepare": "npm run clean && npm run build",
