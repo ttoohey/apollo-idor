@@ -144,8 +144,10 @@ function idorDirectiveTransformer(directiveName, options) {
     }
 
     function mapObjectFieldArguments(fieldConfig) {
-      const { resolve } = fieldConfig;
-      if (!(resolve instanceof Function)) {
+      const { resolve, subscribe } = fieldConfig;
+      const hasResolve = resolve instanceof Function;
+      const hasSubscribe = subscribe instanceof Function;
+      if (!hasResolve && !hasSubscribe) {
         return fieldConfig;
       }
       if (Object.keys(fieldConfig.args).length === 0) {
@@ -153,20 +155,38 @@ function idorDirectiveTransformer(directiveName, options) {
       }
       const argumentTransformers = getArgumentTransformers(fieldConfig.args);
       if (argumentTransformers.size > 0) {
-        fieldConfig.resolve = (root, originalArgs, context, ...rest) => {
-          const args = Object.fromEntries(
-            Object.entries(originalArgs).map(([fieldName, value]) => {
-              if (!argumentTransformers.has(fieldName)) {
-                return [fieldName, value];
-              }
-              return [
-                fieldName,
-                argumentTransformers.get(fieldName)(value, context),
-              ];
-            })
-          );
-          return resolve(root, args, context, ...rest);
-        };
+        if (hasResolve) {
+          fieldConfig.resolve = (root, originalArgs, context, ...rest) => {
+            const args = Object.fromEntries(
+              Object.entries(originalArgs).map(([fieldName, value]) => {
+                if (!argumentTransformers.has(fieldName)) {
+                  return [fieldName, value];
+                }
+                return [
+                  fieldName,
+                  argumentTransformers.get(fieldName)(value, context),
+                ];
+              })
+            );
+            return resolve(root, args, context, ...rest);
+          };
+        }
+        if (hasSubscribe) {
+          fieldConfig.subscribe = (root, originalArgs, context, ...rest) => {
+            const args = Object.fromEntries(
+              Object.entries(originalArgs).map(([fieldName, value]) => {
+                if (!argumentTransformers.has(fieldName)) {
+                  return [fieldName, value];
+                }
+                return [
+                  fieldName,
+                  argumentTransformers.get(fieldName)(value, context),
+                ];
+              })
+            );
+            return subscribe(root, args, context, ...rest);
+          };
+        }
       }
       return fieldConfig;
     }

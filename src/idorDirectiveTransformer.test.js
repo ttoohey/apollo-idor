@@ -1,5 +1,5 @@
 import { gql } from "apollo-server";
-import { graphql } from "graphql";
+import { graphql, subscribe, parse } from "graphql";
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import idorDirectiveTransformer from "./idorDirectiveTransformer";
 
@@ -57,6 +57,19 @@ describe("GraphQL @indirect directive", () => {
       usersWithSub(input: UserWithSubsInput!): [User]
       userWithCircular(input: CircularInput): User
     }
+
+    type Subscription {
+      user(id: ID @indirect(type: "User"), input: UserInput): User
+      users(
+        ids: [ID] @indirect(type: "User")
+        input: UserInput
+        inputs: [UserInput]
+      ): [User]
+      userIds: UserIds
+      userIdList: [ID] @indirect(type: "User")
+      usersWithSub(input: UserWithSubsInput!): [User]
+      userWithCircular(input: CircularInput): User
+    }
   `;
   const resolvers = {
     Query: {
@@ -100,6 +113,75 @@ describe("GraphQL @indirect directive", () => {
         const findId = ({ id, circular }) => (circular ? findId(circular) : id);
         const id = findId(input);
         return users.find((user) => user.id === id);
+      },
+    },
+    Subscription: {
+      user: {
+        async *subscribe(root, { id, input }) {
+          if (input) {
+            id = input.id;
+            if (input.sub) {
+              id = input.sub.subId;
+            }
+          }
+          yield users.find((user) => user.id === id);
+        },
+        resolve(root, { id, input }) {
+          if (input) {
+            id = input.id;
+            if (input.sub) {
+              id = input.sub.subId;
+            }
+          }
+          const resolvedValue = users.find((user) => user.id === id);
+          if (resolvedValue !== root) {
+            throw new Error("resolved value is not expected value");
+          }
+          return resolvedValue;
+        },
+      },
+      users: {
+        async *subscribe(root, { ids, input, inputs }) {
+          if (input) {
+            ids = input.ids;
+            if (input.subs) {
+              ids = input.subs.map(({ subId }) => subId);
+            }
+            if (input.nonnullSubs) {
+              ids = input.nonnullSubs.map(({ subId }) => subId);
+            }
+          }
+          if (inputs) {
+            ids = inputs.map(({ id }) => id);
+          }
+          if (ids) {
+            yield users.filter(({ id }) => ids.includes(id));
+          } else {
+            yield users;
+          }
+        },
+        resolve(root, { ids, input, inputs }) {
+          if (input) {
+            ids = input.ids;
+            if (input.subs) {
+              ids = input.subs.map(({ subId }) => subId);
+            }
+            if (input.nonnullSubs) {
+              ids = input.nonnullSubs.map(({ subId }) => subId);
+            }
+          }
+          if (inputs) {
+            ids = inputs.map(({ id }) => id);
+          }
+          let resolvedValue = users;
+          if (ids) {
+            resolvedValue = users.filter(({ id }) => ids.includes(id));
+          }
+          if (!root.reduce((b, v, i) => b && resolvedValue[i] === v, true)) {
+            throw new Error("resolved value is not expected value");
+          }
+          return users;
+        },
       },
     },
   };
@@ -405,5 +487,57 @@ describe("GraphQL @indirect directive", () => {
       },
     };
     expect(received).toEqual(expected);
+  });
+
+  test("subscription contains obfuscated IDs", async () => {
+    const document = parse(`
+      subscription {
+        users {
+          id
+        }
+      }
+    `);
+    const variableValues = {};
+    const subscription = await subscribe({
+      schema,
+      document,
+      rootValue,
+      contextValue,
+      variableValues,
+    });
+    const received = await subscription.next();
+    const expected = {
+      data: {
+        users: [
+          { id: "FLN1a5AnVsGFmVXQYabHxA" },
+          { id: "Re35aLsjbtwWA0KdZMw5qg" },
+        ],
+      },
+    };
+    expect(received.value).toEqual(expected);
+  });
+
+  test("subscription arguments can contain an obfuscated ID", async () => {
+    const document = parse(`
+      subscription($id: ID!) {
+        user(id: $id) {
+          id
+          name
+        }
+      }
+    `);
+    const variableValues = { id: "FLN1a5AnVsGFmVXQYabHxA" };
+    const subscription = await subscribe({
+      schema,
+      document,
+      rootValue,
+      contextValue,
+      variableValues,
+    });
+    const received = await subscription.next();
+    const expected = {
+      data: { user: { id: "FLN1a5AnVsGFmVXQYabHxA", name: "User 1" } },
+    };
+    expect(received.value).toEqual(expected);
   });
 });
